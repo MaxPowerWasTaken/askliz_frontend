@@ -1,0 +1,3 @@
+.streamlit/secrets.toml
+frontenv/
+*__pycache__*
