@@ -1,4 +1,5 @@
 import lancedb
+import pandas as pd
 import streamlit as st
 
 from lancedb.rerankers import CohereReranker, RRFReranker, LinearCombinationReranker
@@ -15,7 +16,7 @@ def get_most_relevant_chunks(tbl: lancedb.table,
                    query: str, 
                    num_results_retrieved: int = N_RESULTS_RETRIEVED,
                    num_results_to_llm: int = N_TOP_RERANKED_RESULTS_TO_LLM,
-                   show_steps:bool = False):
+                   )->pd.DataFrame:
     """Query the document database."""
 
     # since CohereReranker doesn't support return_score="all", 
@@ -30,7 +31,7 @@ def get_most_relevant_chunks(tbl: lancedb.table,
 
     # final reranked results (in _relevance_score order as determined by reranker)
     final_rr = CohereReranker(model_name="rerank-english-v3.0", api_key=COHERE_API_KEY)
-    final_results = prelim_results.rerank(reranker=final_rr)
+    final_results = prelim_results.rerank(reranker=final_rr).limit(num_results_to_llm)
     
     # joining final reranked results with intermediate distance/bm25 scores
     score_cols = ['_score', '_distance']
