@@ -1,13 +1,13 @@
+import litellm
 import pandas as pd
 
-from typing import List
+from typing import Tuple
 from google.generativeai import GenerativeModel
-
 def generate_response(
     query: str, 
     context_passages: pd.DataFrame, 
-    model: GenerativeModel,
-) -> str:
+    llm_name: str,
+) -> Tuple[str, str]:
     """
     Generate a response using the provided LLM based on the query and retrieved context.
     
@@ -41,16 +41,8 @@ def generate_response(
 
     Answer:
     """
+    messages = [{"content": prompt, "role": "user"}]
+    response = litellm.completion(model=llm_name, messages=messages)#, api_key=GEMINI_API_KEY)
+    response_text = response['choices'][0]['message']['content']
 
-    response = model.generate_content(prompt)
-
-
-    return (response.text, prompt)
-
-"""
-    # generate final text response (G in RAG)
-    final_response = generate_response(query, 
-                                       results_df['text'].tolist(), 
-                                       model=final_llm, 
-                                       debug=False)
-"""
+    return (response_text, prompt)

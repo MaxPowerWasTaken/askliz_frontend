@@ -1,4 +1,5 @@
 import lancedb
+import litellm
 import pandas as pd
 import streamlit as st
 
@@ -9,7 +10,8 @@ from config import (LANCEDB_API_KEY,
                     CLOUD_DB_URI, 
                     N_RESULTS_RETRIEVED, 
                     N_TOP_RERANKED_RESULTS_TO_LLM,
-                    final_llm)
+                    DEFAULT_FINAL_LLM_MODEL,
+                    SELECTED_LITELLM_MODEL_OPTIONS)
 from generate_llm_response import generate_response
 
 def get_most_relevant_chunks(tbl: lancedb.table,
@@ -45,6 +47,12 @@ def main():
     st.title("Ask Liz about the January 6 Select Committee's Findings")
 
     with st.sidebar:
+        selected_llm_model = st.selectbox(label="Final LLM Model",
+                                          options=SELECTED_LITELLM_MODEL_OPTIONS, 
+                                          index=SELECTED_LITELLM_MODEL_OPTIONS.index(DEFAULT_FINAL_LLM_MODEL),
+                                          help="LLM Model wihch takes the most-relevant retrieved document chunks, and formulates a final answer",
+    )
+
         mode_help_txt = """Show intermediate results at each step of RAG frontend pipeline 
         (downstream of document ingestion/parsing/chunking/indexing into document-db)"""
         show_steps = st.toggle("Introspection Mode", value=False, help=mode_help_txt)
@@ -56,7 +64,7 @@ def main():
     if query:
         tbl = lancedb.connect(CLOUD_DB_URI, api_key=LANCEDB_API_KEY).open_table("document_chunks")        
         retrieved_chunks_df = get_most_relevant_chunks(tbl, query)
-        final_response, final_prompt = generate_response(query, retrieved_chunks_df, model=final_llm)
+        final_response, final_prompt = generate_response(query, retrieved_chunks_df, llm_name=selected_llm_model)
         
         if not show_steps:
             st.write(final_response)
