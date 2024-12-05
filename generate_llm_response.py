@@ -124,6 +124,6 @@ def generate_response(
         response_format=NarrativeResponse
     )
 
-    final_user_response = response.choices[0].message.parsed #format_structured_response(response)
+    final_user_response = response.choices[0].message.parsed.content #format_structured_response(response)
 
     return (final_user_response, prompt)
