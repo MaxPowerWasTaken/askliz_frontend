@@ -11,36 +11,30 @@ from config import (LANCEDB_API_KEY,
                     N_RESULTS_RETRIEVED, 
                     N_TOP_RERANKED_RESULTS_TO_LLM,
                     DEFAULT_FINAL_LLM_MODEL,
-                    SELECTED_LITELLM_MODEL_OPTIONS)
+                    DEFAULT_TEMPERATURE,
+                    MODEL_OPTIONS)
+
 from generate_llm_response import generate_response
+from schemas import RetrievedDocumentChunk
 
 def get_most_relevant_chunks(tbl: lancedb.table,
                    query: str, 
                    num_results_retrieved: int = N_RESULTS_RETRIEVED,
                    final_rr = CohereReranker(model_name="rerank-english-v3.0", api_key=COHERE_API_KEY),
-                   #num_results_to_llm: int = N_TOP_RERANKED_RESULTS_TO_LLM,
-                   )->pd.DataFrame:
+                   )->list[RetrievedDocumentChunk]:
     """Query the document database."""
 
-    # since CohereReranker doesn't support return_score="all", 
-    # but also no way to get non-rr scores (e.g. bm25) from hybrid
-    # search without a reranker, I use a preliminary reranker for scores introspection
-    prelim_rr = RRFReranker(return_score="all")
-    prelim_results = (tbl.search(query, query_type="hybrid")
+    # build hybrid search plan (lazy eval; nothing here til we call .to_list(), etc)
+    search_obj = (tbl.search(query, query_type="hybrid")
             .limit(num_results_retrieved)
-            .rerank(reranker=prelim_rr)
-            ).limit(num_results_retrieved) # explicitly do not filter out any (lancedb cloud sometimes curiously does)
-    df0 = prelim_results.to_pandas()
+            .rerank(reranker=final_rr))
 
-    # final reranked results (in _relevance_score order as determined by reranker)
-    reranked_results = prelim_results.rerank(reranker=final_rr)
-    
-    # joining final reranked results with intermediate distance/bm25 scores
-    scores = ['_score', '_distance']
-    key = ['chunk_idx']
-    results_df = df0[scores+key].merge(reranked_results.to_pandas(), on=key, how="left")
+    # execute the search plan, get results as list of RetrievedDocumentChunk obj fr pydantic schema
+    results = [RetrievedDocumentChunk(**elem, relevance_score=elem['_relevance_score']) for elem in search_obj.to_list()]
 
-    return results_df.sort_values(by='_relevance_score', ascending=False).reset_index(drop=True)
+    # ensure we always return results w/ top relevance scores first
+    results.sort(key=lambda x: x.relevance_score, reverse=True)
+
 
 def get_selected_rr(selected_reranker):
     match selected_reranker:
@@ -77,10 +71,13 @@ def main():
                                              help="Number of top-ranked document chunks to send to LLM for final answer formulation")
 
         selected_llm_model = st.selectbox(label="Final LLM Model",
-                                          options=SELECTED_LITELLM_MODEL_OPTIONS, 
-                                          index=SELECTED_LITELLM_MODEL_OPTIONS.index(DEFAULT_FINAL_LLM_MODEL),
+                                          options=MODEL_OPTIONS, 
+                                          index=MODEL_OPTIONS.index(DEFAULT_FINAL_LLM_MODEL),
                                           help="LLM Model wihch takes the most-relevant retrieved document chunks, and formulates a final answer",
     )
+        temperature = st.number_input(label="Temperature",
+                                      min_value=0.0, max_value=1.0, value=DEFAULT_TEMPERATURE,
+                                      help="Temperature parameter for LLM model (lower value for more deterministic)")
 
         mode_help_txt = """Show intermediate results at each step of RAG frontend pipeline 
         (downstream of document ingestion/parsing/chunking/indexing into document-db)"""
@@ -91,16 +88,18 @@ def main():
     query = st.text_input("Enter your question or query")
     
     if query:
-        tbl = lancedb.connect(CLOUD_DB_URI, api_key=LANCEDB_API_KEY).open_table("document_chunks")        
-        retrieved_chunks_df = get_most_relevant_chunks(tbl, 
-                                                       query, 
-                                                       num_results_retrieved=num_results_retrieved,
-                                                       final_rr=final_rr,
-                                                       )
+        tbl = lancedb.connect(CLOUD_DB_URI, api_key=LANCEDB_API_KEY).open_table("document_chunks")
+        retrieved_chunks = get_most_relevant_chunks(tbl, 
+                                                    query, 
+                                                    num_results_retrieved=num_results_retrieved,
+                                                    final_rr=final_rr,
+                                                    )
         final_response, final_prompt = generate_response(query, 
-                                                         retrieved_chunks_df, 
+                                                         retrieved_chunks, 
                                                          num_results_to_llm=num_results_to_llm,
-                                                         llm_name=selected_llm_model)
+                                                         llm_name=selected_llm_model,
+                                                         temperature=temperature,
+                                                         )
         
         if not show_steps:
             st.write(final_response)

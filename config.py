@@ -1,10 +1,13 @@
 import os
 import google.generativeai as genai
 import streamlit as st
+from lancedb.embeddings import get_registry
 from lancedb.rerankers import CrossEncoderReranker
 
 # CONSTANTS
 CLOUD_DB_URI = "db://askliz-doc-db-8qjgop"
+EMBEDDING_MODEL = ("sentence-transformers", "BAAI/bge-small-en-v1.5")  # used for vector field in CLOUD_DB_URI 
+embedding_model = get_registry().get(EMBEDDING_MODEL[0]).create(name=EMBEDDING_MODEL[1])
 N_RESULTS_RETRIEVED = 10  
 N_TOP_RERANKED_RESULTS_TO_LLM = 3
 
@@ -36,18 +39,17 @@ SELECTED_LITELLM_MODEL_OPTIONS = ['gemini/gemini-1.5-pro-latest',
                                   'gpt-4o-mini',
                                   'o1-mini-2024-09-12']
 
+# Restricting model options now that we care more about structured output,
+# which OpenAI supports in a particularly clean and reliable way.
+# (pricing info below from https://openai.com/api/pricing/ as of 11/26/2024)
+MODEL_OPTIONS = ['gpt-4o',                  # $2.50 / $10.00 price per M input/output tokens
+                 'gpt-4o-2024-11-20',       # $2.50 / $10.00 
+                 "gpt-4o-mini",             # $0.150 / $0.600
+                 "gpt-4o-mini-2024-07-18"   # $0.150 / $0.600
+                 "o1-mini",                 # $3.00 / $12.00 
+                 ]
+
+
 ### USER CONFIGURABLE PARAMS ###
-DEFAULT_FINAL_LLM_MODEL = "gemini/gemini-1.5-pro-latest"
-
-
-
-"""# Load & Configure LLM to craft final response to user ('G' in RAG):
-generation_config = {
-    "temperature": 0.7,
-    "top_p": 0.8,
-    "top_k": 40,
-    "max_output_tokens": 2048,
-}
-genai.configure(api_key=GEMINI_API_KEY)
-final_llm = genai.GenerativeModel(FINAL_LLM_MODEL, generation_config=generation_config)
-"""
+DEFAULT_FINAL_LLM_MODEL = "gpt-4o-mini"  # we should be able to get by w/ smallest model avaialable for this step
+DEFAULT_TEMPERATURE = 0.3
