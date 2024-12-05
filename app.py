@@ -20,6 +20,7 @@ from schemas import RetrievedDocumentChunk
 def get_most_relevant_chunks(tbl: lancedb.table,
                    query: str, 
                    num_results_retrieved: int = N_RESULTS_RETRIEVED,
+                   num_results_to_llm: int = N_TOP_RERANKED_RESULTS_TO_LLM,
                    final_rr = CohereReranker(model_name="rerank-english-v3.0", api_key=COHERE_API_KEY),
                    )->list[RetrievedDocumentChunk]:
     """Query the document database."""
@@ -30,10 +31,14 @@ def get_most_relevant_chunks(tbl: lancedb.table,
             .rerank(reranker=final_rr))
 
     # execute the search plan, get results as list of RetrievedDocumentChunk obj fr pydantic schema
-    results = [RetrievedDocumentChunk(**elem, relevance_score=elem['_relevance_score']) for elem in search_obj.to_list()]
+    res_list = search_obj.to_list()[:num_results_to_llm]
+    results = [RetrievedDocumentChunk(**el, 
+                                      relevance_score=el['_relevance_score']) for el in res_list]
 
     # ensure we always return results w/ top relevance scores first
     results.sort(key=lambda x: x.relevance_score, reverse=True)
+
+    return results
 
 
 def get_selected_rr(selected_reranker):
@@ -92,11 +97,11 @@ def main():
         retrieved_chunks = get_most_relevant_chunks(tbl, 
                                                     query, 
                                                     num_results_retrieved=num_results_retrieved,
+                                                    num_results_to_llm=num_results_to_llm,
                                                     final_rr=final_rr,
                                                     )
         final_response, final_prompt = generate_response(query, 
                                                          retrieved_chunks, 
-                                                         num_results_to_llm=num_results_to_llm,
                                                          llm_name=selected_llm_model,
                                                          temperature=temperature,
                                                          )

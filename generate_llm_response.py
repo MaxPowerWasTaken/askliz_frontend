@@ -57,7 +57,6 @@ def format_structured_response(response):
 def generate_response(
     query: str, 
     context_passages: list[RetrievedDocumentChunk],
-    num_results_to_llm: int = 3,
     llm_name: str = "gpt-4o-mini",
     temperature: float = 0.0,
 ) -> Tuple[str, str]:
@@ -93,12 +92,11 @@ def generate_response(
     Below, I will present you with a question, followed by a list of source materials as
     context. The code/schema that defines the source materials is as follows:
 
-    context = "\n\n".join([f'''chunk_idx: {c.chunk_idx}
-                        relevance_score: {c.relevance_score}
-                        section_title: {c.section_title}
-                        text: {c.text}
-                        '''
-                        for c in context_passages])
+    context =   chunk_idx: c.chunk_idx
+                relevance_score: c.relevance_score
+                section_title: c.section_title
+                text: c.text  
+        ... for c in most_relevant_document_chunks
 
     The 'relevance_score' in particular is very reliable (higher scores are more relevant); 
     if a particular source material passage has a significantly higher/lower relevance score 
@@ -126,6 +124,6 @@ def generate_response(
         response_format=NarrativeResponse
     )
 
-    final_user_response = format_structured_response(response)
+    final_user_response = response.choices[0].message.parsed #format_structured_response(response)
 
     return (final_user_response, prompt)

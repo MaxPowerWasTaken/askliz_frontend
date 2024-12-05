@@ -52,4 +52,5 @@ MODEL_OPTIONS = ['gpt-4o',                  # $2.50 / $10.00 price per M input/o
 
 ### USER CONFIGURABLE PARAMS ###
 DEFAULT_FINAL_LLM_MODEL = "gpt-4o-mini"  # we should be able to get by w/ smallest model avaialable for this step
-DEFAULT_TEMPERATURE = 0.3
+DEFAULT_TEMPERATURE = 0.0  # 0.0 for more deterministic output, given I want direct
+                           # quotes, and prioritization of higher-relevance-score passages
